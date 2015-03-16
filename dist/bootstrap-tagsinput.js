@@ -11,6 +11,9 @@
     itemText: function(item) {
       return this.itemValue(item);
     },
+    itemTitle: function(item) {
+      return null;
+    },
     freeInput: true,
     addOnBlur: true,
     maxTags: undefined,
@@ -43,13 +46,8 @@
     this.$container = $('<div class="bootstrap-tagsinput"></div>').addClass(element.className);
     this.$input = $('<input type="text" placeholder="' + this.placeholderText + '"/>').appendTo(this.$container);
 
-    this.$element.after(this.$container);
-    this.$element.parents('form').off('reset.tagsinput').on('reset.tagsinput', function () {
-      self.removeAll.call(self);
-    });
+    this.$element.before(this.$container);
 
-    var inputWidth = (this.inputSize < 3 ? 3 : this.inputSize) + "em";
-    this.$input.get(0).style.cssText = "width: " + inputWidth + " !important;";
     this.build(options);
   }
 
@@ -60,7 +58,7 @@
      * Adds the given item as a new tag. Pass true to dontPushVal to prevent
      * updating the elements val()
      */
-    add: function(item, dontPushVal) {
+    add: function(item, dontPushVal, options) {
       var self = this;
 
       if (self.options.maxTags && self.itemsArray.length >= self.options.maxTags)
@@ -110,7 +108,8 @@
 
       var itemValue = self.options.itemValue(item),
           itemText = self.options.itemText(item),
-          tagClass = self.options.tagClass(item);
+          tagClass = self.options.tagClass(item),
+          itemTitle = self.options.itemTitle(item);
 
       // Ignore items allready added
       var existing = $.grep(self.itemsArray, function(item) { return self.options.itemValue(item) === itemValue; } )[0];
@@ -127,6 +126,12 @@
       if (self.items().toString().length + item.length + 1 > self.options.maxInputLength)
         return;
 
+      // raise beforeItemAdd arg
+      var beforeItemAddEvent = $.Event('beforeItemAdd', { item: item, cancel: false, options: options});
+      self.$element.trigger(beforeItemAddEvent);
+      if (beforeItemAddEvent.cancel)
+        return;
+
       // register item in internal array and map
       self.itemsArray.push(item);
 
@@ -137,7 +142,8 @@
         self.$input.attr('placeholder', self.placeholderText);
 
       // add a tag element
-      var $tag = $('<span class="tag ' + htmlEncode(tagClass) + '">' + htmlEncode(itemText) + '<span data-role="remove"></span></span>');
+
+      var $tag = $('<span class="tag ' + htmlEncode(tagClass) + (itemTitle !== null ? ('" title="' + itemTitle) : '') + '">' + htmlEncode(itemText) + '<span data-role="remove"></span></span>');
       $tag.data('item', item);
       self.findInputWrapper().before($tag);
       $tag.after(' ');
@@ -163,14 +169,14 @@
       if (self.options.maxTags === self.itemsArray.length || self.items().toString().length === self.options.maxInputLength)
         self.$container.addClass('bootstrap-tagsinput-max');
 
-      self.$element.trigger($.Event('itemAdded', { item: item }));
+      self.$element.trigger($.Event('itemAdded', { item: item, options: options }));
     },
 
     /**
      * Removes the given item. Pass true to dontPushVal to prevent updating the
      * elements val()
      */
-    remove: function(item, dontPushVal) {
+    remove: function(item, dontPushVal, options) {
       var self = this;
 
       if (self.objectItems) {
@@ -183,7 +189,7 @@
       }
 
       if (item) {
-        var beforeItemRemoveEvent = $.Event('beforeItemRemove', { item: item, cancel: false });
+        var beforeItemRemoveEvent = $.Event('beforeItemRemove', { item: item, cancel: false, options: options });
         self.$element.trigger(beforeItemRemoveEvent);
         if (beforeItemRemoveEvent.cancel)
           return;
@@ -207,7 +213,7 @@
       if (self.options.maxTags > self.itemsArray.length)
         self.$container.removeClass('bootstrap-tagsinput-max');
 
-      self.$element.trigger($.Event('itemRemoved',  { item: item }));
+      self.$element.trigger($.Event('itemRemoved',  { item: item, options: options }));
     },
 
     /**
@@ -330,6 +336,7 @@
           },
           updater: function (text) {
             self.add(this.map[text]);
+            return this.map[text];
           },
           matcher: function (text) {
             return (text.toLowerCase().indexOf(this.query.trim().toLowerCase()) !== -1);
@@ -524,7 +531,7 @@
   /**
    * Register JQuery plugin
    */
-  $.fn.tagsinput = function(arg1, arg2) {
+  $.fn.tagsinput = function(arg1, arg2, arg3) {
     var results = [];
 
     this.each(function() {
@@ -547,7 +554,11 @@
           results.push(tagsinput);
       } else if(tagsinput[arg1] !== undefined) {
           // Invoke function on existing tags input
-          var retVal = tagsinput[arg1](arg2);
+            if(tagsinput[arg1].length === 3 && arg3 !== undefined){
+               var retVal = tagsinput[arg1](arg2, null, arg3);
+            }else{
+               var retVal = tagsinput[arg1](arg2);
+            }
           if (retVal !== undefined)
               results.push(retVal);
       }
